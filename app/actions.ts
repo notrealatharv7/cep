@@ -49,7 +49,7 @@ export async function authenticateWithCode(
     const db = await getMongoDb();
     const userId = `student_${name.toLowerCase().replace(/\s+/g, "_")}`;
     await db.collection(collections.users).updateOne(
-      { _id: userId },
+      { _id: userId } as any,
       {
         $setOnInsert: {
           role: "student" as UserRole,
@@ -86,7 +86,7 @@ export async function createSession(userName: string): Promise<{
       content: "",
       senderName: userName,
       createdAt: new Date(),
-    });
+    } as any);
     return { success: true, sessionId };
   } catch (error) {
     console.error("Error creating session:", error);
@@ -100,7 +100,7 @@ export async function joinSession(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const db = await getMongoDb();
-    const session = await db.collection(collections.content).findOne({ _id: sessionId });
+    const session = await db.collection(collections.content).findOne({ _id: sessionId } as any);
     if (!session) {
       return { success: false, error: "Session not found" };
     }
@@ -124,7 +124,7 @@ export async function getSessionState(
 }> {
   try {
     const db = await getMongoDb();
-    const session = await db.collection(collections.content).findOne({ _id: sessionId });
+    const session = await db.collection(collections.content).findOne({ _id: sessionId } as any);
     if (!session) {
       return { success: false, error: "Session not found" };
     }
@@ -137,13 +137,13 @@ export async function getSessionState(
       .sort({ timestamp: -1 })
       .limit(50)
       .toArray();
-    (messages as any).reverse();
+    messages.reverse();
 
     // Update user document if userName provided
     if (userName) {
       const userId = `student_${userName.toLowerCase().replace(/\s+/g, "_")}`;
       await db.collection(collections.users).updateOne(
-        { _id: userId },
+        { _id: userId } as any,
         {
           $setOnInsert: {
             role: "student" as UserRole,
@@ -171,7 +171,7 @@ export async function updateContent(
   try {
     const db = await getMongoDb();
     await db.collection(collections.content).updateOne(
-      { _id: sessionId },
+      { _id: sessionId } as any,
       { $set: { content: newContent } }
     );
 
@@ -223,7 +223,7 @@ export async function sendContent(
       filename: filename || undefined,
       mimetype: mimetype || undefined,
       createdAt: new Date(),
-    });
+    } as any);
     return { success: true, contentId };
   } catch (error) {
     console.error("Error sending content:", error);
@@ -241,7 +241,7 @@ export async function receiveContent(
 }> {
   try {
     const db = await getMongoDb();
-    const content = await db.collection(collections.content).findOne({ _id: id });
+    const content = await db.collection(collections.content).findOne({ _id: id } as any);
     if (!content) {
       return { success: false, error: "Content not found" };
     }
@@ -260,7 +260,7 @@ export async function awardPoint(
     const db = await getMongoDb();
     const userId = `student_${senderName.toLowerCase().replace(/\s+/g, "_")}`;
     await db.collection(collections.users).updateOne(
-      { _id: userId },
+      { _id: userId } as any,
       {
         $setOnInsert: {
           role: "student" as UserRole,
@@ -286,7 +286,7 @@ export async function getUserPoints(
   try {
     const db = await getMongoDb();
     const userId = `student_${userName.toLowerCase().replace(/\s+/g, "_")}`;
-    const student = await db.collection(collections.users).findOne({ _id: userId });
+    const student = await db.collection(collections.users).findOne({ _id: userId } as any);
     if (student) {
       return { success: true, points: student.points || 0 };
     }
@@ -347,7 +347,7 @@ export async function upsertTeacher(
     const db = await getMongoDb();
     const userId = uid || `teacher_${(email || name).toLowerCase().replace(/\s+/g, "_")}`;
     await db.collection(collections.users).updateOne(
-      { _id: userId },
+      { _id: userId } as any,
       {
         $setOnInsert: {
           role: "teacher" as UserRole,
