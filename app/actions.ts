@@ -1,21 +1,6 @@
 "use server";
 
-import { db } from "@/firebase/index";
-import {
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  addDoc,
-  query,
-  where,
-  getDocs,
-  orderBy,
-  limit,
-  serverTimestamp,
-  Timestamp,
-} from "firebase/firestore";
+import { getMongoDb, collections } from "@/lib/mongo";
 import { nanoid } from "nanoid";
 import { readFile, writeFile, access } from "fs/promises";
 import { join } from "path";
@@ -38,13 +23,13 @@ export interface SharedContent {
   filename?: string;
   mimetype?: string;
   senderName: string;
-  createdAt: Timestamp;
+  createdAt: Date;
 }
 
 export interface ChatMessage {
   text: string;
   senderName: string;
-  timestamp: Timestamp;
+  timestamp: Date;
 }
 
 // Access code file path
@@ -61,27 +46,23 @@ export async function authenticateWithCode(
       return { success: false, error: "Invalid access code" };
     }
 
-    // Create/update user document
+    const db = await getMongoDb();
     const userId = `student_${name.toLowerCase().replace(/\s+/g, "_")}`;
-    const userRef = doc(db, "users", userId);
-    const userSnap = await getDoc(userRef);
-
-    if (userSnap.exists()) {
-      // Update existing user
-      await updateDoc(userRef, {
-        name,
-        lastActiveAt: serverTimestamp(),
-      });
-    } else {
-      // Create new user
-      await setDoc(userRef, {
-        name,
-        role: "student" as UserRole,
-        points: 0,
-        createdAt: new Date().toISOString(),
-        lastActiveAt: serverTimestamp(),
-      });
-    }
+    await db.collection(collections.users).updateOne(
+      { _id: userId },
+      {
+        $setOnInsert: {
+          role: "student" as UserRole,
+          points: 0,
+          createdAt: new Date().toISOString(),
+        },
+        $set: {
+          name,
+          lastActiveAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
 
     return { success: true };
   } catch (error) {
@@ -97,19 +78,15 @@ export async function createSession(userName: string): Promise<{
   error?: string;
 }> {
   try {
+    const db = await getMongoDb();
     const sessionId = nanoid(8);
-    const sessionRef = doc(db, "content", sessionId);
-
-    // Fire-and-forget operation
-    setDoc(sessionRef, {
+    await db.collection(collections.content).insertOne({
+      _id: sessionId,
       type: "text",
       content: "",
       senderName: userName,
-      createdAt: serverTimestamp(),
-    }).catch((error) => {
-      console.error("Error creating session:", error);
+      createdAt: new Date(),
     });
-
     return { success: true, sessionId };
   } catch (error) {
     console.error("Error creating session:", error);
@@ -122,10 +99,9 @@ export async function joinSession(
   sessionId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const sessionRef = doc(db, "content", sessionId);
-    const sessionSnap = await getDoc(sessionRef);
-
-    if (!sessionSnap.exists()) {
+    const db = await getMongoDb();
+    const session = await db.collection(collections.content).findOne({ _id: sessionId });
+    if (!session) {
       return { success: false, error: "Session not found" };
     }
 
@@ -147,49 +123,40 @@ export async function getSessionState(
   error?: string;
 }> {
   try {
-    const sessionRef = doc(db, "content", sessionId);
-    const sessionSnap = await getDoc(sessionRef);
-
-    if (!sessionSnap.exists()) {
+    const db = await getMongoDb();
+    const session = await db.collection(collections.content).findOne({ _id: sessionId });
+    if (!session) {
       return { success: false, error: "Session not found" };
     }
 
-    const content = sessionSnap.data() as SharedContent;
+    const content = session as unknown as SharedContent;
 
-    // Get messages
-    const messagesRef = collection(db, "content", sessionId, "messages");
-    const messagesQuery = query(
-      messagesRef,
-      orderBy("timestamp", "desc"),
-      limit(50)
-    );
-    const messagesSnap = await getDocs(messagesQuery);
-    const messages = messagesSnap.docs
-      .map((doc) => doc.data() as ChatMessage)
-      .reverse();
+    const messages = await db
+      .collection(collections.messages)
+      .find({ sessionId })
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .toArray();
+    (messages as any).reverse();
 
     // Update user document if userName provided
     if (userName) {
       const userId = `student_${userName.toLowerCase().replace(/\s+/g, "_")}`;
-      const userRef = doc(db, "users", userId);
-      const userSnap = await getDoc(userRef);
-
-      if (userSnap.exists()) {
-        await updateDoc(userRef, {
-          lastActiveAt: serverTimestamp(),
-        });
-      } else {
-        await setDoc(userRef, {
-          name: userName,
-          role: "student" as UserRole,
-          points: 0,
-          createdAt: new Date().toISOString(),
-          lastActiveAt: serverTimestamp(),
-        });
-      }
+      await db.collection(collections.users).updateOne(
+        { _id: userId },
+        {
+          $setOnInsert: {
+            role: "student" as UserRole,
+            points: 0,
+            createdAt: new Date().toISOString(),
+          },
+          $set: { name: userName, lastActiveAt: new Date() },
+        },
+        { upsert: true }
+      );
     }
 
-    return { success: true, content, messages };
+    return { success: true, content: content as SharedContent, messages: messages as unknown as ChatMessage[] };
   } catch (error) {
     console.error("Error getting session state:", error);
     return { success: false, error: "Failed to get session state" };
@@ -202,10 +169,11 @@ export async function updateContent(
   newContent: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const sessionRef = doc(db, "content", sessionId);
-    await updateDoc(sessionRef, {
-      content: newContent,
-    });
+    const db = await getMongoDb();
+    await db.collection(collections.content).updateOne(
+      { _id: sessionId },
+      { $set: { content: newContent } }
+    );
 
     return { success: true };
   } catch (error) {
@@ -221,11 +189,12 @@ export async function sendChatMessage(
   senderName: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const messagesRef = collection(db, "content", sessionId, "messages");
-    await addDoc(messagesRef, {
+    const db = await getMongoDb();
+    await db.collection(collections.messages).insertOne({
+      sessionId,
       text,
       senderName,
-      timestamp: serverTimestamp(),
+      timestamp: new Date(),
     });
 
     return { success: true };
@@ -244,21 +213,17 @@ export async function sendContent(
   mimetype?: string
 ): Promise<{ success: boolean; contentId?: string; error?: string }> {
   try {
+    const db = await getMongoDb();
     const contentId = nanoid(8);
-    const contentRef = doc(db, "content", contentId);
-
-    // Fire-and-forget operation
-    setDoc(contentRef, {
+    await db.collection(collections.content).insertOne({
+      _id: contentId,
       type,
       content,
       senderName,
       filename: filename || undefined,
       mimetype: mimetype || undefined,
-      createdAt: serverTimestamp(),
-    }).catch((error) => {
-      console.error("Error sending content:", error);
+      createdAt: new Date(),
     });
-
     return { success: true, contentId };
   } catch (error) {
     console.error("Error sending content:", error);
@@ -275,15 +240,12 @@ export async function receiveContent(
   error?: string;
 }> {
   try {
-    const contentRef = doc(db, "content", id);
-    const contentSnap = await getDoc(contentRef);
-
-    if (!contentSnap.exists()) {
+    const db = await getMongoDb();
+    const content = await db.collection(collections.content).findOne({ _id: id });
+    if (!content) {
       return { success: false, error: "Content not found" };
     }
-
-    const content = contentSnap.data() as SharedContent;
-    return { success: true, content };
+    return { success: true, content: content as unknown as SharedContent };
   } catch (error) {
     console.error("Error receiving content:", error);
     return { success: false, error: "Failed to receive content" };
@@ -295,23 +257,20 @@ export async function awardPoint(
   senderName: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const db = await getMongoDb();
     const userId = `student_${senderName.toLowerCase().replace(/\s+/g, "_")}`;
-    const userRef = doc(db, "users", userId);
-    const userSnap = await getDoc(userRef);
-
-    if (userSnap.exists()) {
-      const currentPoints = userSnap.data().points || 0;
-      await updateDoc(userRef, {
-        points: currentPoints + 1,
-      });
-    } else {
-      await setDoc(userRef, {
-        name: senderName,
-        role: "student" as UserRole,
-        points: 1,
-        createdAt: new Date().toISOString(),
-      });
-    }
+    await db.collection(collections.users).updateOne(
+      { _id: userId },
+      {
+        $setOnInsert: {
+          role: "student" as UserRole,
+          createdAt: new Date().toISOString(),
+          name: senderName,
+        },
+        $inc: { points: 1 },
+      },
+      { upsert: true }
+    );
 
     return { success: true };
   } catch (error) {
@@ -325,28 +284,18 @@ export async function getUserPoints(
   userName: string
 ): Promise<{ success: boolean; points?: number; error?: string }> {
   try {
+    const db = await getMongoDb();
     const userId = `student_${userName.toLowerCase().replace(/\s+/g, "_")}`;
-    const userRef = doc(db, "users", userId);
-    const userSnap = await getDoc(userRef);
-
-    if (userSnap.exists()) {
-      const points = userSnap.data().points || 0;
-      return { success: true, points };
+    const student = await db.collection(collections.users).findOne({ _id: userId });
+    if (student) {
+      return { success: true, points: student.points || 0 };
     }
-
-    // Check if it's a teacher
-    const teacherQuery = query(
-      collection(db, "users"),
-      where("name", "==", userName),
-      where("role", "==", "teacher")
-    );
-    const teacherSnap = await getDocs(teacherQuery);
-
-    if (!teacherSnap.empty) {
-      const points = teacherSnap.docs[0].data().points || 0;
-      return { success: true, points };
+    const teacher = await db
+      .collection(collections.users)
+      .findOne({ name: userName, role: "teacher" });
+    if (teacher) {
+      return { success: true, points: teacher.points || 0 };
     }
-
     return { success: true, points: 0 };
   } catch (error) {
     console.error("Error getting user points:", error);
@@ -362,36 +311,58 @@ export async function getLeaderboard(): Promise<{
   error?: string;
 }> {
   try {
-    const usersRef = collection(db, "users");
-    const usersSnap = await getDocs(usersRef);
-
+    const db = await getMongoDb();
+    const users = await db.collection(collections.users).find({}).toArray();
     const teachers: UserProfile[] = [];
     const students: UserProfile[] = [];
-
-    usersSnap.forEach((doc) => {
-      const data = doc.data();
+    for (const data of users) {
       const user: UserProfile = {
         name: data.name,
         role: data.role,
         points: data.points || 0,
         createdAt: data.createdAt || new Date().toISOString(),
       };
-
       if (user.role === "teacher") {
         teachers.push(user);
       } else {
         students.push(user);
       }
-    });
-
-    // Sort by points descending
+    }
     teachers.sort((a, b) => b.points - a.points);
     students.sort((a, b) => b.points - a.points);
-
     return { success: true, teachers, students };
   } catch (error) {
     console.error("Error getting leaderboard:", error);
     return { success: false, error: "Failed to get leaderboard" };
+  }
+}
+
+// Upsert teacher after OAuth
+export async function upsertTeacher(
+  name: string,
+  email?: string,
+  uid?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const db = await getMongoDb();
+    const userId = uid || `teacher_${(email || name).toLowerCase().replace(/\s+/g, "_")}`;
+    await db.collection(collections.users).updateOne(
+      { _id: userId },
+      {
+        $setOnInsert: {
+          role: "teacher" as UserRole,
+          points: 0,
+          createdAt: new Date().toISOString(),
+          email: email || undefined,
+        },
+        $set: { name },
+      },
+      { upsert: true }
+    );
+    return { success: true };
+  } catch (error) {
+    console.error("Error upserting teacher:", error);
+    return { success: false, error: "Failed to upsert teacher" };
   }
 }
 

@@ -1,6 +1,6 @@
 # Collab Notes
 
-A real-time classroom collaboration application built with Next.js, Firebase, and TypeScript. This application enables teachers and students to collaborate in real-time during classroom sessions.
+A real-time classroom collaboration application built with Next.js, Firebase Auth, MongoDB, and TypeScript. This application enables teachers and students to collaborate in real-time during classroom sessions.
 
 ## Features
 
@@ -17,7 +17,7 @@ A real-time classroom collaboration application built with Next.js, Firebase, an
 - **Language**: TypeScript
 - **UI Components**: shadcn/ui
 - **Styling**: Tailwind CSS
-- **Backend**: Firebase (Firestore, Authentication)
+- **Backend**: MongoDB (database) + Firebase Authentication (teachers)
 - **Real-time**: Polling mechanism via Server Actions
 
 ## Getting Started
@@ -43,7 +43,7 @@ npm install
 
 3. Set up environment variables:
    - Copy `.env.example` to `.env.local`
-   - Fill in your Firebase configuration values:
+   - Fill in your Firebase and MongoDB configuration values:
    ```
    NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
@@ -51,14 +51,20 @@ npm install
    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+   
+   # MongoDB
+   MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/?retryWrites=true&w=majority
+   MONGODB_DB=collab-notes
    ```
 
 4. Configure Firebase:
    - Enable Google Authentication in Firebase Console
-   - Set up Firestore database
-   - Configure Firestore security rules (or start in test mode)
+   
+5. Provision MongoDB:
+   - Create a MongoDB database (Atlas or self-hosted)
+   - Set `MONGODB_URI` and `MONGODB_DB` in `.env.local`
 
-5. Run the development server:
+6. Run the development server:
 ```bash
 npm run dev
 ```
@@ -91,10 +97,11 @@ collab-notes/
 │   ├── chat-box.tsx           # Chat component
 │   └── ui/                    # shadcn/ui components
 ├── firebase/
-│   ├── config.ts              # Firebase configuration
-│   └── index.ts               # Firebase initialization
+│   ├── config.ts              # Firebase configuration (client)
+│   └── index.ts               # Firebase Auth initialization (no Firestore)
 └── lib/
-    └── utils.ts               # Utility functions
+    ├── utils.ts               # Utility functions
+    └── mongo.ts               # MongoDB client helper
 ```
 
 ## Usage
@@ -116,11 +123,11 @@ collab-notes/
 4. View shared content and participate in chat
 5. Award points to content senders
 
-## Firestore Collections
+## MongoDB Collections
 
-- `/users/{userId}`: User profiles (teachers and students)
-- `/content/{contentId}`: Sessions and shared content
-- `/content/{sessionId}/messages`: Chat messages within sessions
+- `users` (`_id` is user id; `role` is `teacher`|`student`)
+- `content` (`_id` is session/content id; shared content documents)
+- `messages` (chat messages with `sessionId` foreign key)
 
 ## Development
 

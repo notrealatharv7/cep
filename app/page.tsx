@@ -8,10 +8,9 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { authenticateWithCode } from "@/app/actions";
+import { authenticateWithCode, upsertTeacher } from "@/app/actions";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { auth, db } from "@/firebase/index";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { auth } from "@/firebase/index";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Header } from "@/components/header";
@@ -52,19 +51,11 @@ export default function Home() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      // Store user in Firestore
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          name: user.displayName || user.email || "Teacher",
-          role: "teacher",
-          points: 0,
-          createdAt: new Date().toISOString(),
-          email: user.email,
-        });
-      }
+      await upsertTeacher(
+        user.displayName || user.email || "Teacher",
+        user.email || undefined,
+        user.uid
+      );
 
       // Store in sessionStorage
       sessionStorage.setItem("userName", user.displayName || user.email || "Teacher");
