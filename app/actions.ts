@@ -2,8 +2,6 @@
 
 import { getMongoDb, collections } from "@/lib/mongo";
 import { nanoid } from "nanoid";
-import { readFile, writeFile, access } from "fs/promises";
-import { join } from "path";
 
 // Types
 export type UserRole = "teacher" | "student";
@@ -31,9 +29,6 @@ export interface ChatMessage {
   senderName: string;
   timestamp: Date;
 }
-
-// Access code file path
-const ACCESS_CODE_PATH = join(process.cwd(), ".access_code.txt");
 
 // Student authentication
 export async function authenticateWithCode(
@@ -88,9 +83,12 @@ export async function createSession(userName: string): Promise<{
       createdAt: new Date(),
     } as any);
     return { success: true, sessionId };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating session:", error);
-    return { success: false, error: "Failed to create session" };
+    const errorMessage = process.env.NODE_ENV === "development" 
+      ? error.message || "Failed to create session"
+      : "Failed to create session. Please check server logs.";
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -369,14 +367,25 @@ export async function upsertTeacher(
 // Get access code
 export async function getAccessCode(): Promise<string> {
   try {
-    await access(ACCESS_CODE_PATH);
-    const code = await readFile(ACCESS_CODE_PATH, "utf-8");
-    return code.trim();
-  } catch {
-    // File doesn't exist, create default
+    const db = await getMongoDb();
+    const setting = await db.collection(collections.settings).findOne({ _id: "access_code" } as any);
+    
+    if (setting && setting.value) {
+      return setting.value;
+    }
+    
+    // Create default access code if it doesn't exist
     const defaultCode = "COLLAB123";
-    await writeFile(ACCESS_CODE_PATH, defaultCode, "utf-8");
+    await db.collection(collections.settings).updateOne(
+      { _id: "access_code" } as any,
+      { $set: { value: defaultCode, updatedAt: new Date() } },
+      { upsert: true }
+    );
     return defaultCode;
+  } catch (error) {
+    console.error("Error getting access code:", error);
+    // Fallback to default if MongoDB fails
+    return "COLLAB123";
   }
 }
 
@@ -385,11 +394,19 @@ export async function updateAccessCode(
   newCode: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await writeFile(ACCESS_CODE_PATH, newCode.trim(), "utf-8");
+    const db = await getMongoDb();
+    await db.collection(collections.settings).updateOne(
+      { _id: "access_code" } as any,
+      { $set: { value: newCode.trim(), updatedAt: new Date() } },
+      { upsert: true }
+    );
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating access code:", error);
-    return { success: false, error: "Failed to update access code" };
+    const errorMessage = process.env.NODE_ENV === "development"
+      ? error.message || "Failed to update access code"
+      : "Failed to update access code. Please check server logs.";
+    return { success: false, error: errorMessage };
   }
 }
 
