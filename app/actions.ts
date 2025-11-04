@@ -364,6 +364,22 @@ export async function upsertTeacher(
   }
 }
 
+// Test MongoDB connection (for debugging)
+export async function testMongoConnection(): Promise<{ success: boolean; error?: string; message?: string }> {
+  try {
+    const db = await getMongoDb();
+    // Try a simple operation
+    await db.collection(collections.settings).findOne({ _id: "test" } as any);
+    return { success: true, message: "MongoDB connection successful" };
+  } catch (error: any) {
+    const errorMessage = error?.message || error?.toString() || "Unknown error";
+    return { 
+      success: false, 
+      error: `MongoDB connection failed: ${errorMessage}` 
+    };
+  }
+}
+
 // Get access code
 export async function getAccessCode(): Promise<string> {
   try {
@@ -394,19 +410,36 @@ export async function updateAccessCode(
   newCode: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Validate input
+    const trimmedCode = newCode.trim();
+    if (!trimmedCode) {
+      return { success: false, error: "Access code cannot be empty" };
+    }
+    if (trimmedCode.length < 3) {
+      return { success: false, error: "Access code must be at least 3 characters" };
+    }
+
     const db = await getMongoDb();
-    await db.collection(collections.settings).updateOne(
+    const result = await db.collection(collections.settings).updateOne(
       { _id: "access_code" } as any,
-      { $set: { value: newCode.trim(), updatedAt: new Date() } },
+      { $set: { value: trimmedCode, updatedAt: new Date() } },
       { upsert: true }
     );
-    return { success: true };
+    
+    // Verify the update was successful
+    if (result.acknowledged) {
+      return { success: true };
+    } else {
+      return { success: false, error: "MongoDB operation was not acknowledged" };
+    }
   } catch (error: any) {
     console.error("Error updating access code:", error);
-    const errorMessage = process.env.NODE_ENV === "development"
-      ? error.message || "Failed to update access code"
-      : "Failed to update access code. Please check server logs.";
-    return { success: false, error: errorMessage };
+    // Always show detailed error to help debug
+    const errorMessage = error?.message || error?.toString() || "Failed to update access code";
+    return { 
+      success: false, 
+      error: `Failed to update access code: ${errorMessage}` 
+    };
   }
 }
 
