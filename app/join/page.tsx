@@ -20,15 +20,17 @@ export default function JoinPage() {
   const [isJoiningSession, setIsJoiningSession] = useState(false);
   const [isReceivingContent, setIsReceivingContent] = useState(false);
   const [error, setError] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
 
   useEffect(() => {
     // Check if student is logged in
-    const userName = sessionStorage.getItem("userName");
-    const userRole = sessionStorage.getItem("userRole");
+    const name = typeof window !== "undefined" ? sessionStorage.getItem("userName") : null;
+    const role = typeof window !== "undefined" ? sessionStorage.getItem("userRole") : null;
 
-    if (!userName || userRole !== "student") {
+    if (!name || role !== "student") {
       router.push("/");
     }
+    if (name) setUserName(name);
   }, [router]);
 
   const handleJoinSession = async () => {
@@ -188,7 +190,7 @@ export default function JoinPage() {
               <CardDescription>Chat with everyone (not tied to a session)</CardDescription>
             </CardHeader>
             <CardContent>
-              <ChatBox isGeneral userName={sessionStorage.getItem("userName") || "Student"} isTeacher={false} />
+              <ChatBox isGeneral userName={userName || "Student"} isTeacher={false} />
             </CardContent>
           </Card>
         </div>
