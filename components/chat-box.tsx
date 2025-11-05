@@ -4,24 +4,32 @@ import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { sendChatMessage, getSessionState, ChatMessage } from "@/app/actions";
+import { sendChatMessage, getSessionState, ChatMessage, getGeneralMessages, sendGeneralChatMessage } from "@/app/actions";
 import { toast } from "sonner";
 import { Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface ChatBoxProps {
-  sessionId: string;
+  sessionId?: string;
   userName: string;
   isTeacher: boolean;
+  isGeneral?: boolean;
 }
 
-export function ChatBox({ sessionId, userName, isTeacher }: ChatBoxProps) {
+export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false }: ChatBoxProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = async () => {
+    if (isGeneral) {
+      const result = await getGeneralMessages();
+      if (result.success && result.messages) {
+        setMessages(result.messages);
+      }
+      return;
+    }
     const result = await getSessionState(sessionId);
     if (result.success && result.messages) {
       setMessages(result.messages);
@@ -36,7 +44,7 @@ export function ChatBox({ sessionId, userName, isTeacher }: ChatBoxProps) {
     const interval = setInterval(fetchMessages, 3000);
 
     return () => clearInterval(interval);
-  }, [sessionId]);
+  }, [sessionId, isGeneral]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
@@ -47,7 +55,9 @@ export function ChatBox({ sessionId, userName, isTeacher }: ChatBoxProps) {
     if (!newMessage.trim()) return;
 
     setIsLoading(true);
-    const result = await sendChatMessage(sessionId, newMessage, userName);
+    const result = isGeneral
+      ? await sendGeneralChatMessage(newMessage, userName)
+      : await sendChatMessage(sessionId, newMessage, userName);
     setIsLoading(false);
 
     if (result.success) {

@@ -26,10 +26,20 @@ export function ContentDisplay({
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (content?.type === "text") {
+    if (content?.type !== "text") return;
+    // For students, always reflect latest content from server
+    if (!isTeacher) {
       setText(content.content || "");
+      return;
     }
-  }, [content]);
+    // For teachers, avoid overwriting local typing to prevent cursor jumps.
+    // Only update if server differs AND we are not currently saving (debounce period finished)
+    const incoming = content.content || "";
+    if (!isSaving && incoming !== text) {
+      setText(incoming);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, isTeacher, isSaving]);
 
   const handleTextChange = (newText: string) => {
     if (!isTeacher) return;

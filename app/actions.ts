@@ -202,6 +202,48 @@ export async function sendChatMessage(
   }
 }
 
+// General chat - list latest messages
+export async function getGeneralMessages(): Promise<{
+  success: boolean;
+  messages?: ChatMessage[];
+  error?: string;
+}> {
+  try {
+    const db = await getMongoDb();
+    const messages = await db
+      .collection(collections.messages)
+      .find({ sessionId: "general" })
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .toArray();
+    messages.reverse();
+    return { success: true, messages: messages as unknown as ChatMessage[] };
+  } catch (error) {
+    console.error("Error getting general messages:", error);
+    return { success: false, error: "Failed to get messages" };
+  }
+}
+
+// General chat - send message
+export async function sendGeneralChatMessage(
+  text: string,
+  senderName: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const db = await getMongoDb();
+    await db.collection(collections.messages).insertOne({
+      sessionId: "general",
+      text,
+      senderName,
+      timestamp: new Date(),
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending general chat message:", error);
+    return { success: false, error: "Failed to send message" };
+  }
+}
+
 // Send content (one-off sharing)
 export async function sendContent(
   type: ContentType,

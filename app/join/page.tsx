@@ -10,6 +10,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { joinSession, receiveContent } from "@/app/actions";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { SendContentForm } from "@/components/send-content-form";
+import { ChatBox } from "@/components/chat-box";
 
 export default function JoinPage() {
   const router = useRouter();
@@ -163,6 +165,32 @@ export default function JoinPage() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+        </div>
+
+        {/* Student Share Content */}
+        <div className="max-w-2xl mx-auto mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Share Content</CardTitle>
+              <CardDescription>Share text or files like teachers do</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SendContentForm />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* General Chat for Students */}
+        <div className="max-w-2xl mx-auto mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Student General Chat</CardTitle>
+              <CardDescription>Chat with everyone (not tied to a session)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChatBox isGeneral userName={sessionStorage.getItem("userName") || "Student"} isTeacher={false} />
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
