@@ -9,7 +9,7 @@ import { ContentDisplay } from "@/components/content-display";
 import { ChatBox } from "@/components/chat-box";
 import { getSessionState, awardPoint, SharedContent } from "@/app/actions";
 import { toast } from "sonner";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, LogOut } from "lucide-react";
 
 export default function SessionPage() {
   const router = useRouter();
@@ -65,6 +65,15 @@ export default function SessionPage() {
     }
   };
 
+  const handleExitSession = () => {
+    const role = userRole;
+    if (role === "teacher") {
+      router.push("/collab");
+    } else {
+      router.push("/join");
+    }
+  };
+
   const handleRewardSender = async () => {
     if (!content?.senderName) return;
 
@@ -101,17 +110,22 @@ export default function SessionPage() {
                   <p className="text-sm text-muted-foreground">Session ID</p>
                   <p className="font-mono font-semibold text-lg">{sessionId}</p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCopySessionId}
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopySessionId}
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button variant="destructive" onClick={handleExitSession}>
+                    <LogOut className="mr-2 h-4 w-4" /> Exit Session
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

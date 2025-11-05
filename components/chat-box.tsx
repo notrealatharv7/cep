@@ -21,6 +21,8 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
   const [newMessage, setNewMessage] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef<boolean>(false);
 
   const fetchMessages = async () => {
     if (isGeneral) {
@@ -47,8 +49,15 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
   }, [sessionId, isGeneral]);
 
   useEffect(() => {
-    // Scroll to bottom when messages change
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Only auto-scroll if user is near bottom or we just sent a message
+    const container = listRef.current;
+    if (!container) return;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const isNearBottom = distanceFromBottom < 80;
+    if (isNearBottom || shouldAutoScrollRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      shouldAutoScrollRef.current = false;
+    }
   }, [messages]);
 
   const handleSend = async () => {
@@ -62,6 +71,8 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
 
     if (result.success) {
       setNewMessage("");
+      // enable auto-scroll after sending
+      shouldAutoScrollRef.current = true;
       // Immediately fetch new messages
       await fetchMessages();
     } else {
@@ -75,7 +86,7 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
         <CardTitle>Chat</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="h-64 overflow-y-auto space-y-2 border rounded-lg p-4">
+        <div ref={listRef} className="h-64 overflow-y-auto space-y-2 border rounded-lg p-4">
           {messages.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
               No messages yet. Start the conversation!

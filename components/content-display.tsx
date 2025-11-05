@@ -24,6 +24,8 @@ export function ContentDisplay({
   const [text, setText] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const isTypingRef = useRef<boolean>(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (content?.type !== "text") return;
@@ -32,10 +34,9 @@ export function ContentDisplay({
       setText(content.content || "");
       return;
     }
-    // For teachers, avoid overwriting local typing to prevent cursor jumps.
-    // Only update if server differs AND we are not currently saving (debounce period finished)
+    // For teachers, avoid overwriting while typing or saving
     const incoming = content.content || "";
-    if (!isSaving && incoming !== text) {
+    if (!isSaving && !isTypingRef.current && incoming !== text) {
       setText(incoming);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -45,6 +46,12 @@ export function ContentDisplay({
     if (!isTeacher) return;
 
     setText(newText);
+    // mark typing active, clear after debounce window
+    isTypingRef.current = true;
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+    }, 1200);
 
     // Clear existing timer
     if (debounceTimer.current) {
