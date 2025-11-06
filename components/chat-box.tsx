@@ -23,6 +23,8 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef<boolean>(false);
+  const userHasScrolledRef = useRef<boolean>(false);
+  const isInitialLoadRef = useRef<boolean>(true);
 
   const fetchMessages = async () => {
     if (isGeneral) {
@@ -49,14 +51,40 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
   }, [sessionId, isGeneral]);
 
   useEffect(() => {
-    // Only auto-scroll if user is near bottom or we just sent a message
+    // Track manual scrolling
     const container = listRef.current;
     if (!container) return;
+
+    const handleScroll = () => {
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      // If user scrolls more than 100px from bottom, they're reading old messages
+      userHasScrolledRef.current = distanceFromBottom > 100;
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    // Only auto-scroll if:
+    // 1. User just sent a message (shouldAutoScrollRef is true)
+    // 2. It's the initial load
+    // 3. User is at/near bottom AND hasn't manually scrolled away
+    const container = listRef.current;
+    if (!container) return;
+    
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
     const isNearBottom = distanceFromBottom < 80;
-    if (isNearBottom || shouldAutoScrollRef.current) {
+
+    if (shouldAutoScrollRef.current || isInitialLoadRef.current) {
+      // Always scroll on initial load or when user sends a message
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       shouldAutoScrollRef.current = false;
+      isInitialLoadRef.current = false;
+      userHasScrolledRef.current = false;
+    } else if (isNearBottom && !userHasScrolledRef.current) {
+      // Only auto-scroll if user is near bottom and hasn't manually scrolled away
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
 
