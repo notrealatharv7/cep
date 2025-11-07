@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,6 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const shouldAutoScrollRef = useRef<boolean>(false);
-  const userHasScrolledRef = useRef<boolean>(false);
-  const isInitialLoadRef = useRef<boolean>(true);
 
   const fetchMessages = async () => {
     if (isGeneral) {
@@ -50,43 +45,6 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
     return () => clearInterval(interval);
   }, [sessionId, isGeneral]);
 
-  useEffect(() => {
-    // Track manual scrolling
-    const container = listRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-      // If user scrolls more than 100px from bottom, they're reading old messages
-      userHasScrolledRef.current = distanceFromBottom > 100;
-    };
-
-    container.addEventListener("scroll", handleScroll);
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => {
-    // Only auto-scroll if:
-    // 1. User just sent a message (shouldAutoScrollRef is true)
-    // 2. It's the initial load
-    // 3. User is at/near bottom AND hasn't manually scrolled away
-    const container = listRef.current;
-    if (!container) return;
-    
-    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    const isNearBottom = distanceFromBottom < 80;
-
-    if (shouldAutoScrollRef.current || isInitialLoadRef.current) {
-      // Always scroll on initial load or when user sends a message
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      shouldAutoScrollRef.current = false;
-      isInitialLoadRef.current = false;
-      userHasScrolledRef.current = false;
-    } else if (isNearBottom && !userHasScrolledRef.current) {
-      // Only auto-scroll if user is near bottom and hasn't manually scrolled away
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages]);
 
   const handleSend = async () => {
     if (!newMessage.trim()) return;
@@ -99,8 +57,6 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
 
     if (result.success) {
       setNewMessage("");
-      // enable auto-scroll after sending
-      shouldAutoScrollRef.current = true;
       // Immediately fetch new messages
       await fetchMessages();
     } else {
@@ -114,7 +70,7 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
         <CardTitle>Chat</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div ref={listRef} className="h-64 overflow-y-auto space-y-2 border rounded-lg p-4">
+        <div className="h-64 overflow-y-auto space-y-2 border rounded-lg p-4">
           {messages.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
               No messages yet. Start the conversation!
@@ -151,7 +107,6 @@ export function ChatBox({ sessionId = "", userName, isTeacher, isGeneral = false
               );
             })
           )}
-          <div ref={messagesEndRef} />
         </div>
         <div className="flex gap-2">
           <Input
