@@ -206,11 +206,23 @@ export function ContentDisplay({
           {onRewardSender && !isTeacher && (
             <Button 
               variant="outline" 
-              onClick={onRewardSender}
+              onClick={() => {
+                console.log("Reward button clicked", { hasRewarded, isRewarding, onRewardSender: !!onRewardSender });
+                if (!hasRewarded && !isRewarding && onRewardSender) {
+                  onRewardSender();
+                }
+              }}
               disabled={hasRewarded || isRewarding}
             >
               {isRewarding ? "Rewarding..." : hasRewarded ? "✓ Already Rewarded" : "⭐ Reward Sender"}
             </Button>
+          )}
+          {!onRewardSender && !isTeacher && content && (
+            <div className="text-xs text-muted-foreground">
+              {isTeacher ? "Teachers cannot reward" : 
+               content.senderName === undefined ? "No sender" :
+               "Cannot reward yourself"}
+            </div>
           )}
         </div>
       </CardContent>

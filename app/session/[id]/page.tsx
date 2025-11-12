@@ -58,7 +58,10 @@ export default function SessionPage() {
           const rewardCheck = await hasRewarded(name, sessionId);
           if (rewardCheck.success) {
             setHasRewardedSender(rewardCheck.hasRewarded);
+            console.log("Reward check:", { hasRewarded: rewardCheck.hasRewarded, senderName: result.content.senderName, userName: name });
           }
+        } else {
+          console.log("Reward check skipped:", { role, senderName: result.content.senderName, userName: name, isSame: result.content.senderName === name });
         }
       }
     }
@@ -171,7 +174,7 @@ export default function SessionPage() {
                 sessionId={sessionId}
                 isTeacher={isTeacher}
                 onRewardSender={
-                  !isTeacher && content?.senderName !== userName && !hasRewardedSender
+                  !isTeacher && content?.senderName && content.senderName !== userName && !hasRewardedSender
                     ? handleRewardSender
                     : undefined
                 }
