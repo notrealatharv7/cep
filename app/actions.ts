@@ -326,7 +326,7 @@ export async function awardPoint(
 
     if (teacherUser) {
       // Sender is a teacher - use their existing user ID
-      userId = teacherUser._id as string;
+      userId = String(teacherUser._id);
       userRole = "teacher";
     } else {
       // Sender is a student (or doesn't exist yet)
