@@ -7,6 +7,8 @@ import Link from "next/link";
 import { getUserPoints } from "@/app/actions";
 import { signOut as firebaseSignOut } from "firebase/auth";
 import { auth } from "@/firebase/index";
+import { toast } from "sonner";
+import { LogOut } from "lucide-react";
 
 export function Header() {
   const router = useRouter();
@@ -43,17 +45,31 @@ export function Header() {
     try {
       // If teacher, sign out from Firebase
       if (userRole === "teacher" && auth) {
-        await firebaseSignOut(auth);
+        try {
+          await firebaseSignOut(auth);
+        } catch (firebaseError) {
+          console.error("Firebase sign out error:", firebaseError);
+          // Continue with logout even if Firebase sign out fails
+        }
       }
 
       // Clear session storage
       sessionStorage.removeItem("userName");
       sessionStorage.removeItem("userRole");
 
+      // Clear state immediately
+      setUserName(null);
+      setUserRole(null);
+      setPoints(0);
+
+      toast.success("Signed out successfully");
+      
       // Redirect to home
       router.push("/");
+      router.refresh(); // Refresh to ensure clean state
     } catch (error) {
       console.error("Error signing out:", error);
+      toast.error("Failed to sign out. Please try again.");
     }
   };
 
@@ -83,6 +99,7 @@ export function Header() {
             <Button variant="ghost">Leaderboard</Button>
           </Link>
           <Button variant="outline" onClick={handleSignOut}>
+            <LogOut className="mr-2 h-4 w-4" />
             Sign Out
           </Button>
         </div>

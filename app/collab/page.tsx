@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Loader2, Copy, Check } from "lucide-react";
 import { ManageAccessCodeCard } from "@/components/manage-access-code";
 import { SendContentForm } from "@/components/send-content-form";
+import { ManageUsers } from "@/components/manage-users";
 
 export default function CollabPage() {
   const router = useRouter();
@@ -76,6 +77,7 @@ export default function CollabPage() {
           <TabsList>
             <TabsTrigger value="sessions">Live Sessions</TabsTrigger>
             <TabsTrigger value="share">Share Content</TabsTrigger>
+            <TabsTrigger value="users">Manage Users</TabsTrigger>
           </TabsList>
 
           <TabsContent value="sessions" className="space-y-6">
@@ -150,6 +152,10 @@ export default function CollabPage() {
 
           <TabsContent value="share">
             <SendContentForm />
+          </TabsContent>
+
+          <TabsContent value="users">
+            <ManageUsers />
           </TabsContent>
         </Tabs>
       </div>

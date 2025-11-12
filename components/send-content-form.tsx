@@ -12,9 +12,33 @@ import { Copy, Check, Loader2 } from "lucide-react";
 export function SendContentForm() {
   const [text, setText] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
+  const [language, setLanguage] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [shareCode, setShareCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const programmingLanguages = [
+    { value: "", label: "Plain Text" },
+    { value: "c", label: "C" },
+    { value: "cpp", label: "C++" },
+    { value: "python", label: "Python" },
+    { value: "java", label: "Java" },
+    { value: "javascript", label: "JavaScript" },
+    { value: "typescript", label: "TypeScript" },
+    { value: "html", label: "HTML" },
+    { value: "css", label: "CSS" },
+    { value: "json", label: "JSON" },
+    { value: "xml", label: "XML" },
+    { value: "sql", label: "SQL" },
+    { value: "bash", label: "Bash/Shell" },
+    { value: "php", label: "PHP" },
+    { value: "ruby", label: "Ruby" },
+    { value: "go", label: "Go" },
+    { value: "rust", label: "Rust" },
+    { value: "swift", label: "Swift" },
+    { value: "kotlin", label: "Kotlin" },
+    { value: "dart", label: "Dart" },
+  ];
 
   const handleSend = async () => {
     if (!text.trim() && !file) {
@@ -58,12 +82,13 @@ export function SendContentForm() {
         reader.readAsDataURL(file);
       } else {
         // Send text
-        const result = await sendContent("text", text, userName);
+        const result = await sendContent("text", text, userName, undefined, undefined, language || undefined);
         setIsLoading(false);
 
         if (result.success && result.contentId) {
           setShareCode(result.contentId);
           setText("");
+          setLanguage("");
           toast.success("Content shared successfully!");
         } else {
           toast.error(result.error || "Failed to share content");
@@ -107,6 +132,23 @@ export function SendContentForm() {
                 placeholder="Enter text to share..."
                 rows={6}
               />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Language (for code)</label>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {programmingLanguages.map((lang) => (
+                  <option key={lang.value} value={lang.value}>
+                    {lang.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Select the programming language if sharing code
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block">File (optional)</label>
@@ -162,6 +204,7 @@ export function SendContentForm() {
                 setShareCode(null);
                 setText("");
                 setFile(null);
+                setLanguage("");
               }}
               className="w-full"
             >

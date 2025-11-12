@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { updateContent } from "@/app/actions";
 import { SharedContent } from "@/app/actions";
 import { Download } from "lucide-react";
@@ -13,6 +14,8 @@ interface ContentDisplayProps {
   sessionId: string;
   isTeacher: boolean;
   onRewardSender?: () => void;
+  hasRewarded?: boolean;
+  isRewarding?: boolean;
 }
 
 export function ContentDisplay({
@@ -20,6 +23,8 @@ export function ContentDisplay({
   sessionId,
   isTeacher,
   onRewardSender,
+  hasRewarded = false,
+  isRewarding = false,
 }: ContentDisplayProps) {
   const [text, setText] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
@@ -121,8 +126,12 @@ export function ContentDisplay({
               Download
             </Button>
             {onRewardSender && (
-              <Button variant="outline" onClick={onRewardSender}>
-                ⭐ Reward Sender
+              <Button 
+                variant="outline" 
+                onClick={onRewardSender}
+                disabled={hasRewarded || isRewarding}
+              >
+                {isRewarding ? "Rewarding..." : hasRewarded ? "✓ Already Rewarded" : "⭐ Reward Sender"}
               </Button>
             )}
           </div>
@@ -131,14 +140,54 @@ export function ContentDisplay({
     );
   }
 
+  const getLanguageLabel = (lang?: string): string => {
+    if (!lang) return "";
+    const labels: Record<string, string> = {
+      c: "C",
+      cpp: "C++",
+      python: "Python",
+      java: "Java",
+      javascript: "JavaScript",
+      typescript: "TypeScript",
+      html: "HTML",
+      css: "CSS",
+      json: "JSON",
+      xml: "XML",
+      sql: "SQL",
+      bash: "Bash/Shell",
+      php: "PHP",
+      ruby: "Ruby",
+      go: "Go",
+      rust: "Rust",
+      swift: "Swift",
+      kotlin: "Kotlin",
+      dart: "Dart",
+    };
+    return labels[lang] || lang.toUpperCase();
+  };
+
   return (
     <Card>
       <CardContent className="p-6">
         <div className="space-y-4">
           {!isTeacher && (
-            <div>
-              <p className="text-sm text-muted-foreground">Shared by:</p>
-              <p className="font-medium">{content.senderName}</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Shared by:</p>
+                <p className="font-medium">{content.senderName}</p>
+              </div>
+              {content.language && (
+                <Badge variant="secondary" className="text-xs">
+                  {getLanguageLabel(content.language)}
+                </Badge>
+              )}
+            </div>
+          )}
+          {isTeacher && content.language && (
+            <div className="flex justify-end">
+              <Badge variant="secondary" className="text-xs">
+                {getLanguageLabel(content.language)}
+              </Badge>
             </div>
           )}
           <Textarea
@@ -155,8 +204,12 @@ export function ContentDisplay({
             </div>
           )}
           {onRewardSender && !isTeacher && (
-            <Button variant="outline" onClick={onRewardSender}>
-              ⭐ Reward Sender
+            <Button 
+              variant="outline" 
+              onClick={onRewardSender}
+              disabled={hasRewarded || isRewarding}
+            >
+              {isRewarding ? "Rewarding..." : hasRewarded ? "✓ Already Rewarded" : "⭐ Reward Sender"}
             </Button>
           )}
         </div>

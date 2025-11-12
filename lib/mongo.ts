@@ -47,6 +47,7 @@ export type Collections = {
 	content: string;
 	messages: string;
 	settings: string;
+	rewards: string;
 };
 
 export const collections: Collections = {
@@ -54,6 +55,7 @@ export const collections: Collections = {
 	content: "content",
 	messages: "messages",
 	settings: "settings",
+	rewards: "rewards",
 };
 
 

@@ -22,6 +22,7 @@ export interface SharedContent {
   mimetype?: string;
   senderName: string;
   createdAt: Date;
+  language?: string;
 }
 
 export interface ChatMessage {
@@ -250,7 +251,8 @@ export async function sendContent(
   content: string,
   senderName: string,
   filename?: string,
-  mimetype?: string
+  mimetype?: string,
+  language?: string
 ): Promise<{ success: boolean; contentId?: string; error?: string }> {
   try {
     const db = await getMongoDb();
@@ -262,6 +264,7 @@ export async function sendContent(
       senderName,
       filename: filename || undefined,
       mimetype: mimetype || undefined,
+      language: language || undefined,
       createdAt: new Date(),
     } as any);
     return { success: true, contentId };
@@ -294,28 +297,88 @@ export async function receiveContent(
 
 // Award point
 export async function awardPoint(
-  senderName: string
-): Promise<{ success: boolean; error?: string }> {
+  senderName: string,
+  rewarderName: string,
+  contentId: string
+): Promise<{ success: boolean; error?: string; alreadyRewarded?: boolean }> {
   try {
     const db = await getMongoDb();
-    const userId = `student_${senderName.toLowerCase().replace(/\s+/g, "_")}`;
+    
+    // Check if this reward already exists (prevent duplicate rewards)
+    const existingReward = await db.collection(collections.rewards).findOne({
+      rewarderName: rewarderName.toLowerCase(),
+      senderName: senderName.toLowerCase(),
+      contentId: contentId,
+    });
+
+    if (existingReward) {
+      return { success: false, error: "You have already rewarded this sender", alreadyRewarded: true };
+    }
+
+    // First, check if the sender is a teacher
+    const teacherUser = await db.collection(collections.users).findOne({
+      name: senderName,
+      role: "teacher",
+    });
+
+    let userId: string;
+    let userRole: UserRole;
+
+    if (teacherUser) {
+      // Sender is a teacher - use their existing user ID
+      userId = teacherUser._id as string;
+      userRole = "teacher";
+    } else {
+      // Sender is a student (or doesn't exist yet)
+      userId = `student_${senderName.toLowerCase().replace(/\s+/g, "_")}`;
+      userRole = "student";
+    }
+
+    // Award the point
     await db.collection(collections.users).updateOne(
       { _id: userId } as any,
       {
         $setOnInsert: {
-          role: "student" as UserRole,
+          role: userRole,
           createdAt: new Date().toISOString(),
           name: senderName,
+          points: 0,
         },
         $inc: { points: 1 },
       },
       { upsert: true }
     );
 
+    // Record the reward to prevent duplicates
+    await db.collection(collections.rewards).insertOne({
+      rewarderName: rewarderName.toLowerCase(),
+      senderName: senderName.toLowerCase(),
+      contentId: contentId,
+      timestamp: new Date(),
+    });
+
     return { success: true };
   } catch (error) {
     console.error("Error awarding point:", error);
     return { success: false, error: "Failed to award point" };
+  }
+}
+
+// Check if user has already rewarded a sender for specific content
+export async function hasRewarded(
+  rewarderName: string,
+  contentId: string
+): Promise<{ success: boolean; hasRewarded: boolean; error?: string }> {
+  try {
+    const db = await getMongoDb();
+    const reward = await db.collection(collections.rewards).findOne({
+      rewarderName: rewarderName.toLowerCase(),
+      contentId: contentId,
+    });
+    return { success: true, hasRewarded: !!reward };
+  } catch (error) {
+    console.error("Error checking reward status:", error);
+    return { success: false, hasRewarded: false, error: "Failed to check reward status" };
   }
 }
 
@@ -352,22 +415,33 @@ export async function getLeaderboard(): Promise<{
 }> {
   try {
     const db = await getMongoDb();
-    const users = await db.collection(collections.users).find({}).toArray();
+    // Explicitly filter by role to ensure proper separation
+    const teacherUsers = await db.collection(collections.users).find({ role: "teacher" }).toArray();
+    const studentUsers = await db.collection(collections.users).find({ role: "student" }).toArray();
+    
     const teachers: UserProfile[] = [];
     const students: UserProfile[] = [];
-    for (const data of users) {
+    
+    for (const data of teacherUsers) {
       const user: UserProfile = {
         name: data.name,
-        role: data.role,
+        role: "teacher" as UserRole,
         points: data.points || 0,
         createdAt: data.createdAt || new Date().toISOString(),
       };
-      if (user.role === "teacher") {
-        teachers.push(user);
-      } else {
-        students.push(user);
-      }
+      teachers.push(user);
     }
+    
+    for (const data of studentUsers) {
+      const user: UserProfile = {
+        name: data.name,
+        role: "student" as UserRole,
+        points: data.points || 0,
+        createdAt: data.createdAt || new Date().toISOString(),
+      };
+      students.push(user);
+    }
+    
     teachers.sort((a, b) => b.points - a.points);
     students.sort((a, b) => b.points - a.points);
     return { success: true, teachers, students };
@@ -481,6 +555,110 @@ export async function updateAccessCode(
     return { 
       success: false, 
       error: `Failed to update access code: ${errorMessage}` 
+    };
+  }
+}
+
+// Remove all users from database
+export async function removeAllUsers(): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
+  try {
+    const db = await getMongoDb();
+    const result = await db.collection(collections.users).deleteMany({});
+    return {
+      success: true,
+      deletedCount: result.deletedCount,
+    };
+  } catch (error: any) {
+    console.error("Error removing users:", error);
+    return {
+      success: false,
+      error: `Failed to remove users: ${error.message || "Unknown error"}`,
+    };
+  }
+}
+
+// Remove users by role
+export async function removeUsersByRole(role: UserRole): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
+  try {
+    const db = await getMongoDb();
+    const result = await db.collection(collections.users).deleteMany({ role });
+    return {
+      success: true,
+      deletedCount: result.deletedCount,
+    };
+  } catch (error: any) {
+    console.error("Error removing users by role:", error);
+    return {
+      success: false,
+      error: `Failed to remove users: ${error.message || "Unknown error"}`,
+    };
+  }
+}
+
+// Remove a specific user by name (server action - no API key needed for authenticated teachers)
+export async function removeUser(userName: string): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
+  try {
+    const db = await getMongoDb();
+    
+    // Try to find and delete by name (works for both teachers and students)
+    const result = await db.collection(collections.users).deleteMany({ name: userName });
+    
+    // Also try student ID format
+    if (result.deletedCount === 0) {
+      const studentId = `student_${userName.toLowerCase().replace(/\s+/g, "_")}`;
+      const studentResult = await db.collection(collections.users).deleteOne({ _id: studentId } as any);
+      return {
+        success: true,
+        deletedCount: studentResult.deletedCount,
+      };
+    }
+    
+    return {
+      success: true,
+      deletedCount: result.deletedCount,
+    };
+  } catch (error: any) {
+    console.error("Error removing user:", error);
+    return {
+      success: false,
+      error: `Failed to remove user: ${error.message || "Unknown error"}`,
+    };
+  }
+}
+
+// Clear database (preserves settings like access_code)
+export async function clearDatabase(): Promise<{ success: boolean; error?: string; deletedCounts?: { users: number; content: number; messages: number; rewards: number } }> {
+  try {
+    const db = await getMongoDb();
+    
+    // Delete all users (both teachers and students)
+    const usersResult = await db.collection(collections.users).deleteMany({});
+    
+    // Delete all content (sessions and shared content)
+    const contentResult = await db.collection(collections.content).deleteMany({});
+    
+    // Delete all messages (session messages and general chat)
+    const messagesResult = await db.collection(collections.messages).deleteMany({});
+    
+    // Delete all rewards
+    const rewardsResult = await db.collection(collections.rewards).deleteMany({});
+    
+    // Note: We preserve the settings collection (access_code, etc.)
+    
+    return {
+      success: true,
+      deletedCounts: {
+        users: usersResult.deletedCount,
+        content: contentResult.deletedCount,
+        messages: messagesResult.deletedCount,
+        rewards: rewardsResult.deletedCount,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error clearing database:", error);
+    return {
+      success: false,
+      error: `Failed to clear database: ${error.message || "Unknown error"}`,
     };
   }
 }

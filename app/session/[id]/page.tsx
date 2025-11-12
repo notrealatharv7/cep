@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ContentDisplay } from "@/components/content-display";
 import { ChatBox } from "@/components/chat-box";
-import { getSessionState, awardPoint, SharedContent } from "@/app/actions";
+import { getSessionState, awardPoint, hasRewarded, SharedContent } from "@/app/actions";
 import { toast } from "sonner";
 import { Copy, Check, LogOut } from "lucide-react";
 
@@ -20,6 +20,8 @@ export default function SessionPage() {
   const [userName, setUserName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [hasRewardedSender, setHasRewardedSender] = useState(false);
+  const [isRewarding, setIsRewarding] = useState(false);
 
   useEffect(() => {
     // Check if user is logged in
@@ -50,6 +52,14 @@ export default function SessionPage() {
     if (result.success) {
       if (result.content) {
         setContent(result.content);
+        // Check if user has already rewarded this content (only for students)
+        const role = sessionStorage.getItem("userRole");
+        if (role === "student" && result.content.senderName !== name) {
+          const rewardCheck = await hasRewarded(name, sessionId);
+          if (rewardCheck.success) {
+            setHasRewardedSender(rewardCheck.hasRewarded);
+          }
+        }
       }
     }
   };
@@ -75,13 +85,22 @@ export default function SessionPage() {
   };
 
   const handleRewardSender = async () => {
-    if (!content?.senderName) return;
+    if (!content?.senderName || !userName || hasRewardedSender || isRewarding) return;
 
-    const result = await awardPoint(content.senderName);
+    setIsRewarding(true);
+    const result = await awardPoint(content.senderName, userName, sessionId);
+    setIsRewarding(false);
+
     if (result.success) {
       toast.success(`Rewarded ${content.senderName} with 1 point!`);
+      setHasRewardedSender(true);
     } else {
-      toast.error(result.error || "Failed to award point");
+      if (result.alreadyRewarded) {
+        setHasRewardedSender(true);
+        toast.info("You have already rewarded this sender");
+      } else {
+        toast.error(result.error || "Failed to award point");
+      }
     }
   };
 
@@ -137,10 +156,12 @@ export default function SessionPage() {
                 sessionId={sessionId}
                 isTeacher={isTeacher}
                 onRewardSender={
-                  !isTeacher && content?.senderName !== userName
+                  !isTeacher && content?.senderName !== userName && !hasRewardedSender
                     ? handleRewardSender
                     : undefined
                 }
+                hasRewarded={hasRewardedSender}
+                isRewarding={isRewarding}
               />
             </div>
             <div>
