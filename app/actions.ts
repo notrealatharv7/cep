@@ -304,20 +304,23 @@ export async function awardPoint(
   try {
     const db = await getMongoDb();
     
+    console.log("awardPoint called:", { senderName, rewarderName, contentId });
+    
     // Check if this reward already exists (prevent duplicate rewards)
     const existingReward = await db.collection(collections.rewards).findOne({
-      rewarderName: rewarderName.toLowerCase(),
-      senderName: senderName.toLowerCase(),
+      rewarderName: rewarderName.toLowerCase().trim(),
+      senderName: senderName.toLowerCase().trim(),
       contentId: contentId,
     });
 
     if (existingReward) {
+      console.log("Reward already exists");
       return { success: false, error: "You have already rewarded this sender", alreadyRewarded: true };
     }
 
-    // First, check if the sender is a teacher
+    // First, check if the sender is a teacher (exact name match)
     const teacherUser = await db.collection(collections.users).findOne({
-      name: senderName,
+      name: senderName.trim(),
       role: "teacher",
     });
 
@@ -328,20 +331,22 @@ export async function awardPoint(
       // Sender is a teacher - use their existing user ID
       userId = String(teacherUser._id);
       userRole = "teacher";
+      console.log("Found teacher user:", userId);
     } else {
       // Sender is a student (or doesn't exist yet)
-      userId = `student_${senderName.toLowerCase().replace(/\s+/g, "_")}`;
+      userId = `student_${senderName.toLowerCase().trim().replace(/\s+/g, "_")}`;
       userRole = "student";
+      console.log("Using student ID:", userId);
     }
 
     // Award the point
-    await db.collection(collections.users).updateOne(
+    const updateResult = await db.collection(collections.users).updateOne(
       { _id: userId } as any,
       {
         $setOnInsert: {
           role: userRole,
           createdAt: new Date().toISOString(),
-          name: senderName,
+          name: senderName.trim(),
           points: 0,
         },
         $inc: { points: 1 },
@@ -349,18 +354,25 @@ export async function awardPoint(
       { upsert: true }
     );
 
+    console.log("Update result:", { 
+      matchedCount: updateResult.matchedCount, 
+      modifiedCount: updateResult.modifiedCount,
+      upsertedCount: updateResult.upsertedCount 
+    });
+
     // Record the reward to prevent duplicates
     await db.collection(collections.rewards).insertOne({
-      rewarderName: rewarderName.toLowerCase(),
-      senderName: senderName.toLowerCase(),
+      rewarderName: rewarderName.toLowerCase().trim(),
+      senderName: senderName.toLowerCase().trim(),
       contentId: contentId,
       timestamp: new Date(),
     });
 
+    console.log("Reward recorded successfully");
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error awarding point:", error);
-    return { success: false, error: "Failed to award point" };
+    return { success: false, error: `Failed to award point: ${error.message || "Unknown error"}` };
   }
 }
 
@@ -626,15 +638,12 @@ export async function removeUser(userName: string): Promise<{ success: boolean; 
   }
 }
 
-// Clear database (preserves settings like access_code)
-export async function clearDatabase(): Promise<{ success: boolean; error?: string; deletedCounts?: { users: number; content: number; messages: number; rewards: number } }> {
+// Clear database (preserves settings like access_code, users, and points)
+export async function clearDatabase(): Promise<{ success: boolean; error?: string; deletedCounts?: { content: number; messages: number; rewards: number } }> {
   try {
     const db = await getMongoDb();
     
-    // Delete all users (both teachers and students)
-    const usersResult = await db.collection(collections.users).deleteMany({});
-    
-    // Delete all content (sessions and shared content)
+    // Delete all content (sessions and shared content/files)
     const contentResult = await db.collection(collections.content).deleteMany({});
     
     // Delete all messages (session messages and general chat)
@@ -643,12 +652,13 @@ export async function clearDatabase(): Promise<{ success: boolean; error?: strin
     // Delete all rewards
     const rewardsResult = await db.collection(collections.rewards).deleteMany({});
     
-    // Note: We preserve the settings collection (access_code, etc.)
+    // Note: We preserve:
+    // - settings collection (access_code, etc.)
+    // - users collection (users and their points are preserved)
     
     return {
       success: true,
       deletedCounts: {
-        users: usersResult.deletedCount,
         content: contentResult.deletedCount,
         messages: messagesResult.deletedCount,
         rewards: rewardsResult.deletedCount,

@@ -5,11 +5,13 @@ This guide explains how to set up automatic database clearing at midnight.
 ## Overview
 
 The application includes a cron endpoint that clears the database every day at midnight. It removes:
-- All users (teachers and students)
-- All content (sessions and shared content)
+- All content (sessions and shared content/files)
 - All messages (chat messages)
+- All rewards (reward records)
 
-**Note:** The `settings` collection (including access codes) is preserved.
+**Note:** The following are preserved:
+- Users collection (users and their points are kept)
+- Settings collection (including access codes)
 
 ## Setup Steps
 

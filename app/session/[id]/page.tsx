@@ -85,22 +85,37 @@ export default function SessionPage() {
   };
 
   const handleRewardSender = async () => {
-    if (!content?.senderName || !userName || hasRewardedSender || isRewarding) return;
+    if (!content?.senderName || !userName || hasRewardedSender || isRewarding) {
+      console.log("Reward blocked:", { senderName: content?.senderName, userName, hasRewardedSender, isRewarding });
+      return;
+    }
 
+    console.log("Attempting to reward:", { senderName: content.senderName, rewarderName: userName, sessionId });
     setIsRewarding(true);
-    const result = await awardPoint(content.senderName, userName, sessionId);
-    setIsRewarding(false);
-
-    if (result.success) {
-      toast.success(`Rewarded ${content.senderName} with 1 point!`);
-      setHasRewardedSender(true);
-    } else {
-      if (result.alreadyRewarded) {
+    
+    try {
+      const result = await awardPoint(content.senderName, userName, sessionId);
+      console.log("Reward result:", result);
+      
+      if (result.success) {
+        toast.success(`Rewarded ${content.senderName} with 1 point!`);
         setHasRewardedSender(true);
-        toast.info("You have already rewarded this sender");
+        // Force refresh points in header by triggering a page refresh or state update
+        window.dispatchEvent(new Event('points-updated'));
       } else {
-        toast.error(result.error || "Failed to award point");
+        if (result.alreadyRewarded) {
+          setHasRewardedSender(true);
+          toast.info("You have already rewarded this sender");
+        } else {
+          console.error("Reward failed:", result.error);
+          toast.error(result.error || "Failed to award point");
+        }
       }
+    } catch (error) {
+      console.error("Error in handleRewardSender:", error);
+      toast.error("An error occurred while rewarding. Please try again.");
+    } finally {
+      setIsRewarding(false);
     }
   };
 

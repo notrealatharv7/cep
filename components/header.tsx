@@ -37,7 +37,16 @@ export function Header() {
       fetchPoints();
       const interval = setInterval(fetchPoints, 5000);
 
-      return () => clearInterval(interval);
+      // Also listen for points-updated event to refresh immediately
+      const handlePointsUpdate = () => {
+        fetchPoints();
+      };
+      window.addEventListener('points-updated', handlePointsUpdate);
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('points-updated', handlePointsUpdate);
+      };
     }
   }, [pathname]);
 
