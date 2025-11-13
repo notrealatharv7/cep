@@ -105,6 +105,12 @@ export default function SessionPage() {
         setHasRewardedSender(true);
         // Force refresh points in header by triggering a page refresh or state update
         window.dispatchEvent(new Event('points-updated'));
+        
+        // Also refresh the sender's points display if they're viewing the page
+        // Wait a moment for the database to update, then refresh
+        setTimeout(() => {
+          window.dispatchEvent(new Event('points-updated'));
+        }, 1000);
       } else {
         if (result.alreadyRewarded) {
           setHasRewardedSender(true);
