@@ -344,7 +344,6 @@ export async function awardPoint(
           role: userRole,
           createdAt: new Date().toISOString(),
           name: senderName.trim(),
-          points: 0,
         },
         $inc: { points: 1 },
       },
