@@ -298,40 +298,30 @@ export async function receiveContent(
 // Award point
 export async function awardPoint(
   senderName: string,
-  rewarderName: string,
-  contentId: string
+  rewarderName?: string,
+  contentId?: string
 ): Promise<{ success: boolean; error?: string; alreadyRewarded?: boolean }> {
   try {
     const db = await getMongoDb();
     
-    console.log("awardPoint called:", { senderName, rewarderName, contentId });
-    
-    // Check if this reward already exists (prevent duplicate rewards)
-    const existingReward = await db.collection(collections.rewards).findOne({
-      rewarderName: rewarderName.toLowerCase().trim(),
-      senderName: senderName.toLowerCase().trim(),
-      contentId: contentId,
-    });
+    // Check if this reward already exists (prevent duplicate rewards) - only if rewarderName and contentId provided
+    if (rewarderName && contentId) {
+      const existingReward = await db.collection(collections.rewards).findOne({
+        rewarderName: rewarderName.toLowerCase().trim(),
+        senderName: senderName.toLowerCase().trim(),
+        contentId: contentId,
+      });
 
-    if (existingReward) {
-      console.log("Reward already exists");
-      return { success: false, error: "You have already rewarded this sender", alreadyRewarded: true };
+      if (existingReward) {
+        return { success: false, error: "You have already rewarded this sender", alreadyRewarded: true };
+      }
     }
 
     // First, check if the sender is a teacher
-    // Try exact name match first
-    let teacherUser = await db.collection(collections.users).findOne({
+    const teacherUser = await db.collection(collections.users).findOne({
       name: senderName.trim(),
       role: "teacher",
     });
-    
-    // If not found, try case-insensitive name match
-    if (!teacherUser) {
-      const allTeachers = await db.collection(collections.users).find({ role: "teacher" }).toArray();
-      teacherUser = allTeachers.find(t => 
-        t.name && t.name.toLowerCase().trim() === senderName.toLowerCase().trim()
-      ) || null;
-    }
 
     let userId: string;
     let userRole: UserRole;
@@ -340,16 +330,14 @@ export async function awardPoint(
       // Sender is a teacher - use their existing user ID
       userId = String(teacherUser._id);
       userRole = "teacher";
-      console.log("Found teacher user:", { userId, name: teacherUser.name, storedName: senderName });
     } else {
       // Sender is a student (or doesn't exist yet)
       userId = `student_${senderName.toLowerCase().trim().replace(/\s+/g, "_")}`;
       userRole = "student";
-      console.log("Using student ID:", userId);
     }
 
     // Award the point
-    const updateResult = await db.collection(collections.users).updateOne(
+    await db.collection(collections.users).updateOne(
       { _id: userId } as any,
       {
         $setOnInsert: {
@@ -363,52 +351,20 @@ export async function awardPoint(
       { upsert: true }
     );
 
-    console.log("Update result:", { 
-      matchedCount: updateResult.matchedCount, 
-      modifiedCount: updateResult.modifiedCount,
-      upsertedCount: updateResult.upsertedCount,
-      acknowledged: updateResult.acknowledged
-    });
-
-    // Verify the update worked by checking the user's current points
-    const updatedUser = await db.collection(collections.users).findOne({ _id: userId } as any);
-    console.log("User after update:", { 
-      userId, 
-      name: updatedUser?.name, 
-      points: updatedUser?.points,
-      role: updatedUser?.role 
-    });
-
-    if (!updateResult.acknowledged) {
-      console.error("Update not acknowledged by MongoDB");
-      return { success: false, error: "Database update was not acknowledged" };
+    // Record the reward to prevent duplicates - only if rewarderName and contentId provided
+    if (rewarderName && contentId) {
+      await db.collection(collections.rewards).insertOne({
+        rewarderName: rewarderName.toLowerCase().trim(),
+        senderName: senderName.toLowerCase().trim(),
+        contentId: contentId,
+        timestamp: new Date(),
+      });
     }
 
-    // Check if the update actually modified or created a document
-    if (updateResult.matchedCount === 0 && updateResult.upsertedCount === 0) {
-      console.error("No document was matched or created");
-      return { success: false, error: "Failed to update user points - user not found" };
-    }
-
-    // If we matched but didn't modify, that's also a problem (points should have incremented)
-    if (updateResult.matchedCount > 0 && updateResult.modifiedCount === 0 && updateResult.upsertedCount === 0) {
-      console.warn("Document matched but not modified - this might indicate the user already exists with same data");
-      // This is actually okay - the $inc should still work, but let's verify
-    }
-
-    // Record the reward to prevent duplicates
-    const rewardInsertResult = await db.collection(collections.rewards).insertOne({
-      rewarderName: rewarderName.toLowerCase().trim(),
-      senderName: senderName.toLowerCase().trim(),
-      contentId: contentId,
-      timestamp: new Date(),
-    });
-
-    console.log("Reward recorded successfully:", rewardInsertResult.insertedId);
     return { success: true };
   } catch (error: any) {
     console.error("Error awarding point:", error);
-    return { success: false, error: `Failed to award point: ${error.message || "Unknown error"}` };
+    return { success: false, error: "Failed to award point" };
   }
 }
 
@@ -436,25 +392,17 @@ export async function getUserPoints(
 ): Promise<{ success: boolean; points?: number; error?: string }> {
   try {
     const db = await getMongoDb();
-    
-    // Try student ID format first
     const userId = `student_${userName.toLowerCase().trim().replace(/\s+/g, "_")}`;
     const student = await db.collection(collections.users).findOne({ _id: userId } as any);
     if (student) {
-      console.log("Found student points:", { userId, points: student.points });
       return { success: true, points: student.points || 0 };
     }
-    
-    // Try teacher by name (exact match, trimmed)
     const teacher = await db
       .collection(collections.users)
       .findOne({ name: userName.trim(), role: "teacher" });
     if (teacher) {
-      console.log("Found teacher points:", { name: userName.trim(), points: teacher.points, _id: teacher._id });
       return { success: true, points: teacher.points || 0 };
     }
-    
-    console.log("User not found for points:", { userName, userId });
     return { success: true, points: 0 };
   } catch (error) {
     console.error("Error getting user points:", error);

@@ -58,10 +58,7 @@ export default function SessionPage() {
           const rewardCheck = await hasRewarded(name, sessionId);
           if (rewardCheck.success) {
             setHasRewardedSender(rewardCheck.hasRewarded);
-            console.log("Reward check:", { hasRewarded: rewardCheck.hasRewarded, senderName: result.content.senderName, userName: name });
           }
-        } else {
-          console.log("Reward check skipped:", { role, senderName: result.content.senderName, userName: name, isSame: result.content.senderName === name });
         }
       }
     }
@@ -88,35 +85,23 @@ export default function SessionPage() {
   };
 
   const handleRewardSender = async () => {
-    if (!content?.senderName || !userName || hasRewardedSender || isRewarding) {
-      console.log("Reward blocked:", { senderName: content?.senderName, userName, hasRewardedSender, isRewarding });
-      return;
-    }
+    if (!content?.senderName || !userName || hasRewardedSender || isRewarding) return;
 
-    console.log("Attempting to reward:", { senderName: content.senderName, rewarderName: userName, sessionId });
     setIsRewarding(true);
     
     try {
       const result = await awardPoint(content.senderName, userName, sessionId);
-      console.log("Reward result:", result);
       
       if (result.success) {
         toast.success(`Rewarded ${content.senderName} with 1 point!`);
         setHasRewardedSender(true);
-        // Force refresh points in header by triggering a page refresh or state update
+        // Force refresh points in header
         window.dispatchEvent(new Event('points-updated'));
-        
-        // Also refresh the sender's points display if they're viewing the page
-        // Wait a moment for the database to update, then refresh
-        setTimeout(() => {
-          window.dispatchEvent(new Event('points-updated'));
-        }, 1000);
       } else {
         if (result.alreadyRewarded) {
           setHasRewardedSender(true);
           toast.info("You have already rewarded this sender");
         } else {
-          console.error("Reward failed:", result.error);
           toast.error(result.error || "Failed to award point");
         }
       }
